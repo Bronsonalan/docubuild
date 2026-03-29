@@ -46,6 +46,10 @@ export async function POST(request: NextRequest) {
       edl: null,
       hookCandidates: [],
       selectedHook: null,
+      outputUrl: null,
+      renderError: null,
+      renderStartedAt: null,
+      renderCompletedAt: null,
       status: "uploading",
       createdAt: new Date().toISOString(),
     };

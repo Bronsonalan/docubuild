@@ -48,6 +48,11 @@ export default function EditorPage() {
   const [hooksLoading, setHooksLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [outputUrl, setOutputUrl] = useState<string | null>(null);
+  const [projectStatus, setProjectStatus] = useState<Project["status"]>(
+    "uploading"
+  );
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderStartedAt, setRenderStartedAt] = useState<string | null>(null);
   const initRan = useRef(false);
 
   // Persist a partial update (for client-only state like selectedHook)
@@ -86,7 +91,10 @@ export default function EditorPage() {
         setVideoUrl(proj.videoUrl);
         setHookCandidates(proj.hookCandidates || []);
         setSelectedHook(proj.selectedHook);
-        if (proj.outputUrl) setOutputUrl(proj.outputUrl);
+        setOutputUrl(proj.outputUrl || null);
+        setProjectStatus(proj.status);
+        setRenderError(proj.renderError || null);
+        setRenderStartedAt(proj.renderStartedAt || null);
 
         // If already processed, load from store
         if (proj.transcript && proj.edl) {
@@ -199,7 +207,9 @@ export default function EditorPage() {
   const handleRenderComplete = useCallback(
     async (url: string) => {
       setOutputUrl(url);
-      // Render route already persists, but update local state
+      setProjectStatus("complete");
+      setRenderError(null);
+      setRenderStartedAt(null);
     },
     []
   );
@@ -320,6 +330,9 @@ export default function EditorPage() {
         onGenerateHooks={handleGenerateHooks}
         hooksLoading={hooksLoading}
         outputUrl={outputUrl}
+        projectStatus={projectStatus}
+        renderError={renderError}
+        renderStartedAt={renderStartedAt}
         onRenderComplete={handleRenderComplete}
       />
 

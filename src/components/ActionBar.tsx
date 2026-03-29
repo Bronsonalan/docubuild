@@ -1,12 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Project } from "@/types";
 
 interface ActionBarProps {
   projectId: string;
   onGenerateHooks: () => void;
   hooksLoading: boolean;
   outputUrl: string | null;
+  projectStatus: Project["status"];
+  renderError: string | null;
+  renderStartedAt: string | null;
   onRenderComplete: (url: string) => void;
 }
 
@@ -15,27 +19,115 @@ export default function ActionBar({
   onGenerateHooks,
   hooksLoading,
   outputUrl,
+  projectStatus,
+  renderError,
+  renderStartedAt,
   onRenderComplete,
 }: ActionBarProps) {
   const [rendering, setRendering] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [renderStartedAtMs, setRenderStartedAtMs] = useState<number | null>(
+    null
+  );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusTone, setStatusTone] = useState<"info" | "success" | "error">(
     "info"
   );
 
   useEffect(() => {
-    if (!rendering) return;
+    if (projectStatus === "rendering") {
+      setRendering(true);
+      setStatusTone("info");
+      setStatusMessage(null);
+      setRenderStartedAtMs(
+        renderStartedAt ? Date.parse(renderStartedAt) || Date.now() : Date.now()
+      );
+      return;
+    }
 
-    const startedAt = Date.now();
+    setRendering(false);
+    setRenderStartedAtMs(null);
+
+    if (renderError) {
+      setStatusTone("error");
+      setStatusMessage(renderError);
+      return;
+    }
+
+    if (projectStatus === "complete" && outputUrl) {
+      setStatusTone("success");
+      setStatusMessage("Render complete.");
+      return;
+    }
+
+    setStatusMessage(null);
+    setStatusTone("info");
+  }, [outputUrl, projectStatus, renderError, renderStartedAt]);
+
+  useEffect(() => {
+    if (!rendering || renderStartedAtMs === null) return;
+
+    setElapsedSeconds(
+      Math.max(0, Math.floor((Date.now() - renderStartedAtMs) / 1000))
+    );
     const interval = window.setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+      setElapsedSeconds(
+        Math.max(0, Math.floor((Date.now() - renderStartedAtMs) / 1000))
+      );
     }, 1000);
 
     return () => {
       window.clearInterval(interval);
     };
-  }, [rendering]);
+  }, [renderStartedAtMs, rendering]);
+
+  useEffect(() => {
+    if (!rendering) return;
+
+    let cancelled = false;
+
+    const pollProject = async () => {
+      try {
+        const res = await fetch(`/api/project/${projectId}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+
+        const project: Project = await res.json();
+        if (cancelled) return;
+
+        if (project.status === "complete") {
+          if (project.outputUrl) {
+            onRenderComplete(project.outputUrl);
+          }
+          setRendering(false);
+          setRenderStartedAtMs(null);
+          setStatusTone("success");
+          setStatusMessage("Render complete.");
+          return;
+        }
+
+        if (project.status !== "rendering") {
+          setRendering(false);
+          setRenderStartedAtMs(null);
+          if (project.renderError) {
+            setStatusTone("error");
+            setStatusMessage(project.renderError);
+          }
+        }
+      } catch {
+        // Best-effort polling. The active render request will still surface errors.
+      }
+    };
+
+    const interval = window.setInterval(pollProject, 3000);
+    void pollProject();
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [onRenderComplete, projectId, rendering]);
 
   const formatElapsed = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -46,6 +138,7 @@ export default function ActionBar({
   const handleExport = async () => {
     setRendering(true);
     setElapsedSeconds(0);
+    setRenderStartedAtMs(Date.now());
     setStatusMessage(null);
     setStatusTone("info");
 
@@ -70,9 +163,11 @@ export default function ActionBar({
       }
 
       onRenderComplete(data.outputUrl);
+      setRenderStartedAtMs(null);
       setStatusTone("success");
       setStatusMessage("Render complete.");
     } catch (error) {
+      setRenderStartedAtMs(null);
       setStatusTone("error");
       setStatusMessage(
         error instanceof Error ? error.message : "Render failed."
@@ -111,7 +206,7 @@ export default function ActionBar({
           {rendering ? "Rendering..." : "Export"}
         </button>
 
-        {outputUrl && (
+        {outputUrl && !rendering && (
           <a
             href={outputUrl}
             download

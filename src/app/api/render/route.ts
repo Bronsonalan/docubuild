@@ -71,8 +71,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update status to rendering
+    // Persist render start state so refreshes can recover the in-flight export.
     project.status = "rendering";
+    project.renderStartedAt = new Date().toISOString();
+    project.renderCompletedAt = null;
+    project.renderError = null;
     await saveProject(project);
 
     console.log(`[render] Starting render for project ${projectId}`);
@@ -156,15 +159,22 @@ export async function POST(request: NextRequest) {
     const outputUrl = getRenderUrl(`${projectId}.mp4`);
     project.status = "complete";
     project.outputUrl = outputUrl;
+    project.renderCompletedAt = new Date().toISOString();
+    project.renderError = null;
     await saveProject(project);
 
     return NextResponse.json({ outputUrl });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
+
     if (projectId) {
       try {
         const project = await getProject(projectId);
         if (project) {
           project.status = "editing";
+          project.renderError = errorMessage;
+          project.renderCompletedAt = null;
           await saveProject(project);
         }
       } catch {
@@ -176,7 +186,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Render failed",
-        details: error instanceof Error ? error.message : String(error),
+        details: errorMessage,
       },
       { status: 500 }
     );

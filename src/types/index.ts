@@ -35,7 +35,10 @@ export interface Project {
   edl: EDL | null;
   hookCandidates: Array<{ text: string; reasoning: string }>;
   selectedHook: Hook | null;
-  outputUrl?: string;
+  outputUrl?: string | null;
+  renderError?: string | null;
+  renderStartedAt?: string | null;
+  renderCompletedAt?: string | null;
   status: 'uploading' | 'transcribing' | 'processing' | 'editing' | 'rendering' | 'complete';
   createdAt: string;
 }
