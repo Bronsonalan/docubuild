@@ -1,0 +1,66 @@
+import { NextRequest, NextResponse } from "next/server";
+import { generateJSON } from "@/lib/gemini";
+import { getProject, saveProject } from "@/lib/store";
+
+const HOOK_GENERATION_SYSTEM_PROMPT = `You are a hook writer for short-form founder content. Given a video transcript, generate punchy, attention-grabbing hooks that would make someone stop scrolling. Each hook should be 5-10 words max. Return hooks that capture the most interesting/surprising/valuable moment in the transcript.
+
+Return your response as JSON in this exact format:
+{
+  "hooks": [
+    { "text": "The hook text here", "reasoning": "Why this hook works and what moment it captures" }
+  ]
+}
+
+Rules:
+- Each hook must be 5-10 words
+- Hooks should be provocative, surprising, or create curiosity
+- Focus on the most compelling moments from the transcript
+- Include reasoning for why each hook would stop the scroll
+- Do not use clickbait that misrepresents the content`;
+
+const DEFAULT_COUNT = 5;
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { projectId, count = DEFAULT_COUNT } = body as {
+      projectId: string;
+      count?: number;
+    };
+
+    if (!projectId || typeof projectId !== "string") {
+      return NextResponse.json(
+        { error: "projectId is required" },
+        { status: 400 }
+      );
+    }
+
+    const project = await getProject(projectId);
+    if (!project || !project.transcript) {
+      return NextResponse.json(
+        { error: "Project not found or missing transcript" },
+        { status: 404 }
+      );
+    }
+
+    const result = await generateJSON<{
+      hooks: Array<{ text: string; reasoning: string }>;
+    }>(
+      "gemini-2.0-flash",
+      HOOK_GENERATION_SYSTEM_PROMPT,
+      `Generate exactly ${count} hooks for this transcript:\n\n${project.transcript.fullText}`,
+      { temperature: 0.9 }
+    );
+
+    // Persist hooks to project
+    await saveProject({ ...project, hookCandidates: result.hooks });
+
+    return NextResponse.json({ hooks: result.hooks });
+  } catch (error) {
+    console.error("Hook generation error:", error);
+    return NextResponse.json(
+      { error: "Failed to generate hooks" },
+      { status: 500 }
+    );
+  }
+}
