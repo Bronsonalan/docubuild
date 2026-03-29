@@ -16,11 +16,15 @@ interface HookSelectorProps {
 
 export default function HookSelector({
   candidates,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   edlDuration,
   onSelect,
   onClose,
 }: HookSelectorProps) {
+  const hookEndTime =
+    edlDuration && edlDuration > 0
+      ? Math.min(5, Math.max(2, edlDuration * 0.15))
+      : 3;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
       <div className="bg-[#141414] border border-gray-700 rounded-lg w-full max-w-lg max-h-[80vh] overflow-y-auto">
@@ -45,7 +49,7 @@ export default function HookSelector({
                 onSelect({
                   text: candidate.text,
                   startTime: 0,
-                  endTime: 3,
+                  endTime: hookEndTime,
                 })
               }
               className="w-full text-left p-4 bg-[#1a1a1a] border border-gray-700 rounded-lg hover:border-gray-500 transition-colors"

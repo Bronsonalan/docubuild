@@ -7,7 +7,7 @@ import {
   interpolate,
   Sequence,
 } from 'remotion';
-import type { Hook, TranscriptWord } from '../types';
+import type { Hook, Segment, TranscriptWord } from '../types';
 import type { DocuBuildShortSchemaProps } from './schema';
 
 const VIDEO_AREA_PERCENT = 0.6;
@@ -50,6 +50,24 @@ function getActiveCaptionGroup(
     words: captions.slice(start, end),
     activeIndex: currentIndex - start,
   };
+}
+
+function compositionTimeToOriginalTime(
+  compositionTime: number,
+  segments: Segment[]
+): number {
+  let elapsed = 0;
+
+  for (const segment of segments) {
+    const segmentDuration = segment.end - segment.start;
+    if (compositionTime < elapsed + segmentDuration) {
+      return segment.start + (compositionTime - elapsed);
+    }
+    elapsed += segmentDuration;
+  }
+
+  const lastSegment = segments[segments.length - 1];
+  return lastSegment ? lastSegment.end : 0;
 }
 
 const CaptionBar: React.FC<{
@@ -173,7 +191,11 @@ export const DocuBuildShort: React.FC<DocuBuildShortSchemaProps> = ({
 }) => {
   const frame = useCurrentFrame();
   const { fps, height } = useVideoConfig();
-  const timeInSeconds = frame / fps;
+  const compositionTimeInSeconds = frame / fps;
+  const originalTimeInSeconds = compositionTimeToOriginalTime(
+    compositionTimeInSeconds,
+    edl.segments
+  );
 
   const videoAreaHeight = Math.round(height * VIDEO_AREA_PERCENT);
   const captionAreaHeight = Math.round(height * CAPTION_AREA_PERCENT);
@@ -241,7 +263,7 @@ export const DocuBuildShort: React.FC<DocuBuildShortSchemaProps> = ({
       {/* Caption bar - bottom 40% */}
       <CaptionBar
         captions={captions}
-        timeInSeconds={timeInSeconds}
+        timeInSeconds={originalTimeInSeconds}
         height={captionAreaHeight}
       />
     </AbsoluteFill>
