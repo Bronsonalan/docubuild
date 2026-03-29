@@ -13,6 +13,8 @@ import ActionBar from "@/components/ActionBar";
 type EditorStatus = "loading" | "transcribing" | "processing" | "ready" | "error";
 
 const DEFAULT_EDL: EDL = { segments: [], hooks: [], captions: [] };
+const PROJECT_POLL_INTERVAL_MS = 3000;
+const TRANSCRIPTION_POLL_TIMEOUT_MS = 10 * 60 * 1000;
 
 async function getErrorMessage(response: Response, fallback: string) {
   try {
@@ -28,6 +30,17 @@ async function getErrorMessage(response: Response, fallback: string) {
   }
 
   return fallback;
+}
+
+async function fetchProjectSnapshot(projectId: string): Promise<Project> {
+  const res = await fetch(`/api/project/${projectId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error("Project not found");
+  }
+
+  return res.json();
 }
 
 export default function EditorPage() {
@@ -55,6 +68,16 @@ export default function EditorPage() {
   const [renderStartedAt, setRenderStartedAt] = useState<string | null>(null);
   const initRan = useRef(false);
 
+  const applyProjectSnapshot = useCallback((proj: Project) => {
+    setVideoUrl(proj.videoUrl);
+    setHookCandidates(proj.hookCandidates || []);
+    setSelectedHook(proj.selectedHook);
+    setOutputUrl(proj.outputUrl || null);
+    setProjectStatus(proj.status);
+    setRenderError(proj.renderError || null);
+    setRenderStartedAt(proj.renderStartedAt || null);
+  }, []);
+
   // Persist a partial update (for client-only state like selectedHook)
   const persistProject = useCallback(
     async (updates: Partial<Project>) => {
@@ -80,21 +103,13 @@ export default function EditorPage() {
     async function init() {
       try {
         console.log(`[editor] init start projectId=${projectId}`);
-        const res = await fetch(`/api/project/${projectId}`);
-        if (!res.ok) throw new Error("Project not found");
-        const proj: Project = await res.json();
+        let proj = await fetchProjectSnapshot(projectId);
         if (cancelled) return;
 
         console.log(
           `[editor] project loaded projectId=${projectId} transcript=${Boolean(proj.transcript)} edl=${Boolean(proj.edl)} status=${proj.status}`
         );
-        setVideoUrl(proj.videoUrl);
-        setHookCandidates(proj.hookCandidates || []);
-        setSelectedHook(proj.selectedHook);
-        setOutputUrl(proj.outputUrl || null);
-        setProjectStatus(proj.status);
-        setRenderError(proj.renderError || null);
-        setRenderStartedAt(proj.renderStartedAt || null);
+        applyProjectSnapshot(proj);
 
         // If already processed, load from store
         if (proj.transcript && proj.edl) {
@@ -111,6 +126,47 @@ export default function EditorPage() {
           console.log(
             `[editor] resuming with persisted transcript projectId=${projectId} words=${transcriptToProcess.words.length}`
           );
+        } else if (proj.status === "transcribing") {
+          setStatus("transcribing");
+          console.log(
+            `[editor] waiting for in-flight transcription projectId=${projectId}`
+          );
+
+          const pollStartedAt = Date.now();
+          while (!cancelled) {
+            if (Date.now() - pollStartedAt > TRANSCRIPTION_POLL_TIMEOUT_MS) {
+              throw new Error(
+                "Transcription is taking longer than expected. Retry in a moment."
+              );
+            }
+
+            await new Promise((resolve) =>
+              window.setTimeout(resolve, PROJECT_POLL_INTERVAL_MS)
+            );
+            if (cancelled) return;
+
+            proj = await fetchProjectSnapshot(projectId);
+            if (cancelled) return;
+
+            applyProjectSnapshot(proj);
+            console.log(
+              `[editor] transcription poll projectId=${projectId} status=${proj.status} transcript=${Boolean(proj.transcript)}`
+            );
+
+            if (proj.transcript) {
+              transcriptToProcess = proj.transcript;
+              setTranscript(transcriptToProcess);
+              break;
+            }
+
+            if (proj.status !== "transcribing") {
+              break;
+            }
+          }
+
+          if (!transcriptToProcess) {
+            throw new Error("Transcription did not complete.");
+          }
         } else {
           // Step 1: Transcribe (server persists result)
           setStatus("transcribing");
@@ -168,7 +224,7 @@ export default function EditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [applyProjectSnapshot, projectId]);
 
   const handleGenerateHooks = useCallback(async () => {
     if (!transcript || hooksLoading) return;
