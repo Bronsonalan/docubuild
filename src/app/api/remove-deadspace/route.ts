@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getProject, saveProject } from "@/lib/store";
 import type { EDL, Segment, TranscriptWord } from "@/types";
 
-const DEFAULT_THRESHOLD = 0.3; // seconds
+const DEFAULT_THRESHOLD = 1.0; // seconds — only cut gaps longer than 1s
 
 export async function POST(request: NextRequest) {
   try {
