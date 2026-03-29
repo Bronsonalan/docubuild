@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { mkdir } from "fs/promises";
+import { RENDERS_DIR, getRenderUrl } from "@/lib/media";
 import { getProject, saveProject } from "@/lib/store";
 
 export const maxDuration = 300;
@@ -94,8 +95,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Create output directory
-    const rendersDir = path.join(process.cwd(), "public", "renders");
-    await mkdir(rendersDir, { recursive: true });
+    await mkdir(RENDERS_DIR, { recursive: true });
 
     console.log("[render] Loading Remotion server packages...");
     const [{ bundle }, { renderMedia, selectComposition }] = await Promise.all([
@@ -132,9 +132,7 @@ export async function POST(request: NextRequest) {
 
     // Render the video
     const outputPath = path.join(
-      process.cwd(),
-      "public",
-      "renders",
+      RENDERS_DIR,
       `${projectId}.mp4`
     );
 
@@ -155,7 +153,7 @@ export async function POST(request: NextRequest) {
     console.log(`[render] Render complete for project ${projectId}`);
 
     // Update project with output URL and status
-    const outputUrl = `/renders/${projectId}.mp4`;
+    const outputUrl = getRenderUrl(`${projectId}.mp4`);
     project.status = "complete";
     project.outputUrl = outputUrl;
     await saveProject(project);

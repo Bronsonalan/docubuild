@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "fs/promises";
+import { readFile, writeFile, mkdir, rename } from "fs/promises";
 import path from "path";
 import type { Project } from "@/types";
 
@@ -16,7 +16,9 @@ async function readStore(): Promise<Record<string, Project>> {
 
 async function writeStore(store: Record<string, Project>): Promise<void> {
   await mkdir(STORE_DIR, { recursive: true });
-  await writeFile(STORE_FILE, JSON.stringify(store, null, 2));
+  const tempFile = `${STORE_FILE}.tmp`;
+  await writeFile(tempFile, JSON.stringify(store, null, 2));
+  await rename(tempFile, STORE_FILE);
 }
 
 export async function getProject(id: string): Promise<Project | null> {
@@ -28,4 +30,11 @@ export async function saveProject(project: Project): Promise<void> {
   const store = await readStore();
   store[project.id] = project;
   await writeStore(store);
+}
+
+export async function listProjects(limit = 20): Promise<Project[]> {
+  const store = await readStore();
+  return Object.values(store)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, limit);
 }

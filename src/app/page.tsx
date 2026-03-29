@@ -1,9 +1,19 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const ACCEPTED_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+
+type RecentProject = {
+  id: string;
+  createdAt: string;
+  status: string;
+  videoUrl: string;
+  outputUrl: string | null;
+  transcriptWords: number;
+  segments: number;
+};
 
 export default function Home() {
   const router = useRouter();
@@ -12,6 +22,30 @@ export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProjects() {
+      try {
+        const response = await fetch("/api/projects?limit=6");
+        if (!response.ok) return;
+        const data = (await response.json()) as { projects?: RecentProject[] };
+        if (!cancelled) {
+          setRecentProjects(data.projects || []);
+        }
+      } catch {
+        // Best-effort only; the landing page should still work without history.
+      }
+    }
+
+    loadProjects();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const uploadFile = useCallback(
     async (file: File) => {
@@ -140,6 +174,67 @@ export default function Home() {
       />
 
       {error && <p className="text-red-400 mt-4 text-sm">{error}</p>}
+
+      {recentProjects.length > 0 && (
+        <div className="w-full max-w-xl mt-10">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-medium uppercase tracking-[0.2em] text-gray-400">
+              Recent Projects
+            </h2>
+            <span className="text-xs text-gray-500">
+              Resume without re-uploading
+            </span>
+          </div>
+
+          <div className="border border-gray-800 rounded-lg overflow-hidden bg-[#0f0f0f]">
+            {recentProjects.map((project) => (
+              <div
+                key={project.id}
+                className="flex items-center justify-between gap-4 px-4 py-3 border-b border-gray-800 last:border-b-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-mono text-gray-200 truncate">
+                    {project.id}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {formatProjectMeta(project)}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {project.outputUrl && (
+                    <a
+                      href={project.outputUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-3 py-1.5 text-xs rounded border border-gray-700 text-gray-300 hover:border-gray-500 hover:text-white"
+                    >
+                      Output
+                    </a>
+                  )}
+                  <a
+                    href={`/editor/${project.id}`}
+                    className="px-3 py-1.5 text-xs rounded bg-white text-black hover:bg-gray-200"
+                  >
+                    Open
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function formatProjectMeta(project: RecentProject): string {
+  const createdAt = new Date(project.createdAt).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return `${project.status} · ${project.transcriptWords} words · ${project.segments} segments · ${createdAt}`;
 }

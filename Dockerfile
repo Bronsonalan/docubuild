@@ -38,7 +38,7 @@ COPY --from=builder /app/next.config.mjs ./next.config.mjs
 COPY --from=builder /app/postcss.config.mjs ./postcss.config.mjs
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
-RUN mkdir -p .data public/uploads public/renders
+RUN mkdir -p .data/media/uploads .data/media/renders
 
 EXPOSE 3000
 

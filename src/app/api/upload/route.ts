@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import { UPLOADS_DIR, getUploadUrl } from "@/lib/media";
 import { saveProject } from "@/lib/store";
 import type { Project } from "@/types";
-
-const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +36,7 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     await writeFile(filepath, Buffer.from(bytes));
 
-    const videoUrl = `/uploads/${filename}`;
+    const videoUrl = getUploadUrl(filename);
 
     // Save project to store
     const project: Project = {

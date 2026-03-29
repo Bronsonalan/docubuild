@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import path from "path";
 import {
   uploadAndWaitForFile,
   generateJSON,
   DEFAULT_GEMINI_MODEL,
 } from "@/lib/gemini";
+import { getMimeType, resolveStoredFilePath } from "@/lib/media";
 import { getProject, saveProject } from "@/lib/store";
 import type { Transcript } from "@/types";
 
@@ -63,19 +63,8 @@ export async function POST(request: NextRequest) {
       `[transcribe] Starting Gemini transcription projectId=${projectId} videoUrl=${project.videoUrl}`
     );
 
-    // Resolve the video file path from the public directory
-    const videoPath = path.join(process.cwd(), "public", project.videoUrl);
-
-    // Determine MIME type from extension
-    const ext = path.extname(project.videoUrl).toLowerCase();
-    const mimeTypes: Record<string, string> = {
-      ".mp4": "video/mp4",
-      ".mov": "video/quicktime",
-      ".avi": "video/x-msvideo",
-      ".webm": "video/webm",
-      ".mkv": "video/x-matroska",
-    };
-    const mimeType = mimeTypes[ext] || "video/mp4";
+    const videoPath = resolveStoredFilePath(project.videoUrl);
+    const mimeType = getMimeType(videoPath);
 
     // Upload to Gemini File API and wait for processing
     const file = await uploadAndWaitForFile(
