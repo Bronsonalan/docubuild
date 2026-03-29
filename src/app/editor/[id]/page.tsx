@@ -296,6 +296,7 @@ export default function EditorPage() {
             <VideoPlayer
               videoUrl={videoUrl}
               edl={edl}
+              selectedHook={selectedHook}
               currentTime={playerTime}
               onTimeUpdate={setPlayerTime}
             />
