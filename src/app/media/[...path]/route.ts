@@ -1,7 +1,6 @@
-import { createReadStream } from "fs";
+import { createReadStream, type ReadStream } from "fs";
 import { stat } from "fs/promises";
 import path from "path";
-import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { getMediaPath, getMimeType, type MediaKind } from "@/lib/media";
 
@@ -24,6 +23,93 @@ function parseMediaParts(parts: string[]): { kind: MediaKind; fileName: string }
   }
 
   return { kind, fileName };
+}
+
+function isIgnorableStreamError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return (
+    code === "ERR_INVALID_STATE" ||
+    code === "ERR_STREAM_PREMATURE_CLOSE" ||
+    code === "ECONNRESET"
+  );
+}
+
+function toWebStream(
+  stream: ReadStream,
+  signal: AbortSignal
+): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+
+      const cleanup = () => {
+        stream.off("data", onData);
+        stream.off("end", onEnd);
+        stream.off("error", onError);
+        signal.removeEventListener("abort", onAbort);
+      };
+
+      const closeSafely = () => {
+        if (closed) return;
+        closed = true;
+        cleanup();
+        try {
+          controller.close();
+        } catch {
+          // The controller may already be closed if the consumer cancelled.
+        }
+      };
+
+      const destroySafely = () => {
+        if (!stream.destroyed) {
+          stream.destroy();
+        }
+      };
+
+      const onData = (chunk: Buffer) => {
+        if (closed) return;
+        try {
+          controller.enqueue(new Uint8Array(chunk));
+        } catch (error) {
+          if (!isIgnorableStreamError(error)) {
+            console.error("[media] Stream enqueue error:", error);
+          }
+          closeSafely();
+          destroySafely();
+        }
+      };
+
+      const onEnd = () => {
+        closeSafely();
+      };
+
+      const onError = (error: Error) => {
+        if (closed) return;
+        closed = true;
+        cleanup();
+        if (isIgnorableStreamError(error)) {
+          destroySafely();
+          return;
+        }
+        controller.error(error);
+      };
+
+      const onAbort = () => {
+        closeSafely();
+        destroySafely();
+      };
+
+      stream.on("data", onData);
+      stream.on("end", onEnd);
+      stream.on("error", onError);
+      signal.addEventListener("abort", onAbort, { once: true });
+    },
+    cancel() {
+      if (!stream.destroyed) {
+        stream.destroy();
+      }
+    },
+  });
 }
 
 async function serveFile(
@@ -52,7 +138,7 @@ async function serveFile(
       }
 
       const stream = createReadStream(filePath);
-      return new NextResponse(Readable.toWeb(stream) as ReadableStream, {
+      return new NextResponse(toWebStream(stream, request.signal), {
         headers: commonHeaders,
       });
     }
@@ -90,7 +176,7 @@ async function serveFile(
     }
 
     const stream = createReadStream(filePath, { start, end });
-    return new NextResponse(Readable.toWeb(stream) as ReadableStream, {
+    return new NextResponse(toWebStream(stream, request.signal), {
       status: 206,
       headers: commonHeaders,
     });
