@@ -14,6 +14,22 @@ type EditorStatus = "loading" | "transcribing" | "processing" | "ready" | "error
 
 const DEFAULT_EDL: EDL = { segments: [], hooks: [], captions: [] };
 
+async function getErrorMessage(response: Response, fallback: string) {
+  try {
+    const data = await response.json();
+    if (typeof data?.details === "string" && data.details) {
+      return `${fallback}: ${data.details}`;
+    }
+    if (typeof data?.error === "string" && data.error) {
+      return `${fallback}: ${data.error}`;
+    }
+  } catch {
+    // Fall through to the default message if the response body is not JSON.
+  }
+
+  return fallback;
+}
+
 export default function EditorPage() {
   const params = useParams();
   const projectId = params.id as string;
@@ -87,7 +103,11 @@ export default function EditorPage() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ projectId }),
           });
-          if (!transcribeRes.ok) throw new Error("Transcription failed");
+          if (!transcribeRes.ok) {
+            throw new Error(
+              await getErrorMessage(transcribeRes, "Transcription failed")
+            );
+          }
           const transcribeData = await transcribeRes.json();
           if (cancelled) return;
           transcriptToProcess = transcribeData.transcript;
@@ -101,7 +121,11 @@ export default function EditorPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ projectId }),
         });
-        if (!deadspaceRes.ok) throw new Error("Processing failed");
+        if (!deadspaceRes.ok) {
+          throw new Error(
+            await getErrorMessage(deadspaceRes, "Processing failed")
+          );
+        }
         const deadspaceData = await deadspaceRes.json();
         if (cancelled) return;
         setEdl(deadspaceData.edl);
