@@ -8,9 +8,33 @@ import { getProject, saveProject } from "@/lib/store";
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
+function firstHeaderValue(value: string | null): string | null {
+  return value?.split(",")[0]?.trim() || null;
+}
+
+function getRequestOrigin(request: NextRequest): string {
+  const protocol =
+    firstHeaderValue(request.headers.get("x-forwarded-proto")) ??
+    request.nextUrl.protocol.replace(/:$/, "") ??
+    "http";
+  const host =
+    firstHeaderValue(request.headers.get("x-forwarded-host")) ??
+    firstHeaderValue(request.headers.get("host")) ??
+    request.nextUrl.host;
+
+  if (host) {
+    return `${protocol}://${host}`;
+  }
+
+  return request.nextUrl.origin;
+}
+
 export async function POST(request: NextRequest) {
+  let projectId: string | null = null;
+
   try {
-    const { projectId } = await request.json();
+    const body = await request.json();
+    projectId = body.projectId;
 
     if (!projectId || typeof projectId !== "string") {
       return NextResponse.json(
@@ -48,9 +72,11 @@ export async function POST(request: NextRequest) {
 
     console.log(`[render] Starting render for project ${projectId}`);
 
-    // Construct absolute video URL
-    const port = process.env.PORT || 3000;
-    const absoluteVideoUrl = `http://localhost:${port}${project.videoUrl}`;
+    // OffthreadVideo needs an absolute URL that matches the current request origin.
+    const absoluteVideoUrl = new URL(
+      project.videoUrl,
+      getRequestOrigin(request)
+    ).toString();
 
     // Calculate total duration from EDL segments
     const totalSeconds = project.edl.segments.reduce(
@@ -120,6 +146,18 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ outputUrl });
   } catch (error) {
+    if (projectId) {
+      try {
+        const project = await getProject(projectId);
+        if (project) {
+          project.status = "editing";
+          await saveProject(project);
+        }
+      } catch {
+        // Best-effort cleanup; the original render error is the important signal.
+      }
+    }
+
     console.error("[render] Error:", error);
     return NextResponse.json(
       {
