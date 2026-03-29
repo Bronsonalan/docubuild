@@ -78,7 +78,11 @@ Apply the user's editing command and return the updated EDL.`;
     const result = await generateJSON<EDL & { explanation: string }>(
       DEFAULT_GEMINI_MODEL,
       CHAT_EDIT_SYSTEM_PROMPT,
-      prompt
+      prompt,
+      {
+        timeoutMs: 60 * 1000,
+        operationName: `chat edit projectId=${projectId}`,
+      }
     );
 
     const { explanation, ...updatedEdl } = result;

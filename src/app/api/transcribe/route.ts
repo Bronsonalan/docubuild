@@ -29,9 +29,10 @@ Rules:
 - Each word's "end" must be >= its "start"`;
 
 export async function POST(request: NextRequest) {
+  let projectId: string | null = null;
   try {
     const body = await request.json();
-    const { projectId } = body;
+    projectId = body.projectId;
 
     console.log(`[transcribe] Request received projectId=${String(projectId)}`);
 
@@ -88,7 +89,11 @@ export async function POST(request: NextRequest) {
           },
         },
         { text: "Transcribe this video with word-level timestamps." },
-      ]
+      ],
+      {
+        timeoutMs: 3 * 60 * 1000,
+        operationName: `transcription projectId=${projectId}`,
+      }
     );
 
     console.log(
@@ -103,6 +108,20 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ transcript });
   } catch (error) {
+    if (projectId) {
+      try {
+        const project = await getProject(projectId);
+        if (project && !project.transcript) {
+          await saveProject({ ...project, status: "uploading" });
+          console.log(
+            `[transcribe] Reset project status after failure projectId=${projectId}`
+          );
+        }
+      } catch (cleanupError) {
+        console.error("[transcribe] Cleanup error:", cleanupError);
+      }
+    }
+
     console.error("[transcribe] Error:", error);
     return NextResponse.json(
       {

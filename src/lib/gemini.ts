@@ -3,6 +3,7 @@ import type { Part } from "@google/generative-ai";
 const FILE_POLL_INTERVAL_MS = 2000;
 const FILE_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
 export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+const DEFAULT_GENERATION_TIMEOUT_MS = 60 * 1000;
 
 type GeminiClients = {
   FileState: (typeof import("@google/generative-ai/server"))["FileState"];
@@ -13,6 +14,31 @@ type GeminiClients = {
 };
 
 let geminiClientsPromise: Promise<GeminiClients> | null = null;
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operationName: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      console.error(
+        `[gemini] ${operationName} timed out after ${timeoutMs}ms`
+      );
+      reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
 
 function getApiKey(): string {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -103,12 +129,19 @@ export async function generateJSON<T>(
   modelName: string,
   systemInstruction: string,
   prompt: string | Array<Part>,
-  requestOptions?: { temperature?: number }
+  requestOptions?: {
+    temperature?: number;
+    timeoutMs?: number;
+    operationName?: string;
+  }
 ): Promise<T> {
   const startedAt = Date.now();
   const { genAI } = await getGeminiClients();
+  const operationName = requestOptions?.operationName ?? "generateJSON";
+  const timeoutMs =
+    requestOptions?.timeoutMs ?? DEFAULT_GENERATION_TIMEOUT_MS;
   console.log(
-    `[gemini] generateJSON start model=${modelName} prompt_type=${Array.isArray(prompt) ? "parts" : "text"}`
+    `[gemini] generateJSON start model=${modelName} operation=${operationName} prompt_type=${Array.isArray(prompt) ? "parts" : "text"} timeout_ms=${timeoutMs}`
   );
   const model = genAI.getGenerativeModel({
     model: modelName,
@@ -119,10 +152,14 @@ export async function generateJSON<T>(
     },
   });
 
-  const result = await model.generateContent(prompt);
+  const result = await withTimeout(
+    model.generateContent(prompt),
+    timeoutMs,
+    operationName
+  );
   const text = result.response.text();
   console.log(
-    `[gemini] generateJSON complete model=${modelName} response_chars=${text.length} elapsed_ms=${Date.now() - startedAt}`
+    `[gemini] generateJSON complete model=${modelName} operation=${operationName} response_chars=${text.length} elapsed_ms=${Date.now() - startedAt}`
   );
   return JSON.parse(text) as T;
 }

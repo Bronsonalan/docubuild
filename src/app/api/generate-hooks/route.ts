@@ -58,7 +58,11 @@ export async function POST(request: NextRequest) {
       DEFAULT_GEMINI_MODEL,
       HOOK_GENERATION_SYSTEM_PROMPT,
       `Generate exactly ${count} hooks for this transcript:\n\n${project.transcript.fullText}`,
-      { temperature: 0.9 }
+      {
+        temperature: 0.9,
+        timeoutMs: 60 * 1000,
+        operationName: `hook generation projectId=${projectId}`,
+      }
     );
 
     // Persist hooks to project
