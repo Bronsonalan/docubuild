@@ -66,10 +66,11 @@ function toWebStream(
         }
       };
 
-      const onData = (chunk: Buffer) => {
+      const onData = (chunk: string | Buffer) => {
         if (closed) return;
         try {
-          controller.enqueue(new Uint8Array(chunk));
+          const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+          controller.enqueue(new Uint8Array(buf));
         } catch (error) {
           if (!isIgnorableStreamError(error)) {
             console.error("[media] Stream enqueue error:", error);
