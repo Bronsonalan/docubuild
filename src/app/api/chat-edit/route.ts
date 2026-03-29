@@ -27,12 +27,17 @@ Rules:
 - When the user references transcript content ("the part where I talk about X"), use the transcript to find the relevant timestamps`;
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   try {
     const body = await request.json();
     const { projectId, message } = body as {
       projectId: string;
       message: string;
     };
+
+    console.log(
+      `[chat-edit] Request received projectId=${String(projectId)} message_chars=${typeof message === "string" ? message.length : 0}`
+    );
 
     if (!projectId || typeof projectId !== "string") {
       return NextResponse.json(
@@ -55,6 +60,10 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    console.log(
+      `[chat-edit] Generating edit projectId=${projectId} current_segments=${project.edl.segments.length} transcript_words=${project.transcript.words.length}`
+    );
 
     const prompt = `User command: "${message}"
 
@@ -82,11 +91,18 @@ Apply the user's editing command and return the updated EDL.`;
     // Persist updated EDL to project
     await saveProject({ ...project, edl });
 
+    console.log(
+      `[chat-edit] EDL persisted projectId=${projectId} segments=${edl.segments.length} captions=${edl.captions.length} elapsed_ms=${Date.now() - startedAt}`
+    );
+
     return NextResponse.json({ edl, explanation });
   } catch (error) {
-    console.error("Chat edit error:", error);
+    console.error("[chat-edit] Error:", error);
     return NextResponse.json(
-      { error: "Failed to process editing command" },
+      {
+        error: "Failed to process editing command",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

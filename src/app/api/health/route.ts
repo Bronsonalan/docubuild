@@ -19,6 +19,8 @@ async function pathExists(targetPath: string): Promise<boolean> {
 }
 
 export async function GET() {
+  const startedAt = Date.now();
+  console.log("[health] Request received");
   const chromePath =
     process.env.REMOTION_BROWSER_EXECUTABLE ||
     process.env.CHROME_PATH ||
@@ -29,6 +31,10 @@ export async function GET() {
     pathExists(RENDERS_DIR),
     pathExists(chromePath),
   ]);
+
+  console.log(
+    `[health] Response ok=true geminiConfigured=${Boolean(process.env.GEMINI_API_KEY)} chromeExists=${chromeExists} uploadsDirExists=${uploadsDirExists} rendersDirExists=${rendersDirExists} elapsed_ms=${Date.now() - startedAt}`
+  );
 
   return NextResponse.json({
     ok: true,

@@ -4,10 +4,18 @@ import { listProjects } from "@/lib/store";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const startedAt = Date.now();
   try {
     const limitParam = request.nextUrl.searchParams.get("limit");
     const limit = limitParam ? Number.parseInt(limitParam, 10) : 20;
+    console.log(
+      `[projects] Request received limit=${Number.isNaN(limit) ? "nan" : limit}`
+    );
     const projects = await listProjects(Number.isNaN(limit) ? 20 : limit);
+
+    console.log(
+      `[projects] Returning count=${projects.length} elapsed_ms=${Date.now() - startedAt}`
+    );
 
     return NextResponse.json({
       projects: projects.map((project) => ({

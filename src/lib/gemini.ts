@@ -52,6 +52,7 @@ export async function uploadAndWaitForFile(
   mimeType: string,
   displayName: string
 ) {
+  const startedAt = Date.now();
   const { fileManager, FileState } = await getGeminiClients();
   console.log(
     `[gemini] Uploading file for processing: ${displayName} (${mimeType}) from ${filePath}`
@@ -62,7 +63,6 @@ export async function uploadAndWaitForFile(
   });
 
   let file = uploadResult.file;
-  const startedAt = Date.now();
   let pollCount = 0;
 
   console.log(
@@ -105,8 +105,11 @@ export async function generateJSON<T>(
   prompt: string | Array<Part>,
   requestOptions?: { temperature?: number }
 ): Promise<T> {
+  const startedAt = Date.now();
   const { genAI } = await getGeminiClients();
-  console.log(`[gemini] generateJSON start model=${modelName}`);
+  console.log(
+    `[gemini] generateJSON start model=${modelName} prompt_type=${Array.isArray(prompt) ? "parts" : "text"}`
+  );
   const model = genAI.getGenerativeModel({
     model: modelName,
     systemInstruction,
@@ -119,7 +122,7 @@ export async function generateJSON<T>(
   const result = await model.generateContent(prompt);
   const text = result.response.text();
   console.log(
-    `[gemini] generateJSON complete model=${modelName} response_chars=${text.length}`
+    `[gemini] generateJSON complete model=${modelName} response_chars=${text.length} elapsed_ms=${Date.now() - startedAt}`
   );
   return JSON.parse(text) as T;
 }

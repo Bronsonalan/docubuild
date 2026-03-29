@@ -21,12 +21,17 @@ Rules:
 const DEFAULT_COUNT = 5;
 
 export async function POST(request: NextRequest) {
+  const startedAt = Date.now();
   try {
     const body = await request.json();
     const { projectId, count = DEFAULT_COUNT } = body as {
       projectId: string;
       count?: number;
     };
+
+    console.log(
+      `[hooks] Request received projectId=${String(projectId)} count=${count}`
+    );
 
     if (!projectId || typeof projectId !== "string") {
       return NextResponse.json(
@@ -43,6 +48,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(
+      `[hooks] Generating hooks projectId=${projectId} transcript_words=${project.transcript.words.length}`
+    );
+
     const result = await generateJSON<{
       hooks: Array<{ text: string; reasoning: string }>;
     }>(
@@ -55,11 +64,18 @@ export async function POST(request: NextRequest) {
     // Persist hooks to project
     await saveProject({ ...project, hookCandidates: result.hooks });
 
+    console.log(
+      `[hooks] Hooks persisted projectId=${projectId} hooks=${result.hooks.length} elapsed_ms=${Date.now() - startedAt}`
+    );
+
     return NextResponse.json({ hooks: result.hooks });
   } catch (error) {
-    console.error("Hook generation error:", error);
+    console.error("[hooks] Error:", error);
     return NextResponse.json(
-      { error: "Failed to generate hooks" },
+      {
+        error: "Failed to generate hooks",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
