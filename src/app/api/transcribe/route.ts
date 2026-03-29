@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
-import { uploadAndWaitForFile, generateJSON } from "@/lib/gemini";
+import {
+  uploadAndWaitForFile,
+  generateJSON,
+  DEFAULT_GEMINI_MODEL,
+} from "@/lib/gemini";
 import { getProject, saveProject } from "@/lib/store";
 import type { Transcript } from "@/types";
 
@@ -70,7 +74,7 @@ export async function POST(request: NextRequest) {
 
     // Generate transcription using Gemini
     const transcript = await generateJSON<Transcript>(
-      "gemini-2.0-flash",
+      DEFAULT_GEMINI_MODEL,
       TRANSCRIPTION_SYSTEM_PROMPT,
       [
         {

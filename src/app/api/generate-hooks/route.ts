@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateJSON } from "@/lib/gemini";
+import { generateJSON, DEFAULT_GEMINI_MODEL } from "@/lib/gemini";
 import { getProject, saveProject } from "@/lib/store";
 
 const HOOK_GENERATION_SYSTEM_PROMPT = `You are a hook writer for short-form founder content. Given a video transcript, generate punchy, attention-grabbing hooks that would make someone stop scrolling. Each hook should be 5-10 words max. Return hooks that capture the most interesting/surprising/valuable moment in the transcript.
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     const result = await generateJSON<{
       hooks: Array<{ text: string; reasoning: string }>;
     }>(
-      "gemini-2.0-flash",
+      DEFAULT_GEMINI_MODEL,
       HOOK_GENERATION_SYSTEM_PROMPT,
       `Generate exactly ${count} hooks for this transcript:\n\n${project.transcript.fullText}`,
       { temperature: 0.9 }

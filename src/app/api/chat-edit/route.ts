@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateJSON } from "@/lib/gemini";
+import { generateJSON, DEFAULT_GEMINI_MODEL } from "@/lib/gemini";
 import { getProject, saveProject } from "@/lib/store";
 import type { EDL } from "@/types";
 
@@ -67,7 +67,7 @@ ${JSON.stringify(project.transcript, null, 2)}
 Apply the user's editing command and return the updated EDL.`;
 
     const result = await generateJSON<EDL & { explanation: string }>(
-      "gemini-2.0-flash",
+      DEFAULT_GEMINI_MODEL,
       CHAT_EDIT_SYSTEM_PROMPT,
       prompt
     );

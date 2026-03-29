@@ -2,6 +2,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleAIFileManager, FileState } from "@google/generative-ai/server";
 
 const apiKey = process.env.GEMINI_API_KEY;
+const FILE_POLL_INTERVAL_MS = 2000;
+const FILE_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
 
 if (!apiKey) {
   throw new Error("GEMINI_API_KEY environment variable is not set");
@@ -9,6 +11,7 @@ if (!apiKey) {
 
 export const genAI = new GoogleGenerativeAI(apiKey);
 export const fileManager = new GoogleAIFileManager(apiKey);
+export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
 
 /**
  * Upload a file to the Gemini File API and wait for it to become ACTIVE.
@@ -24,10 +27,17 @@ export async function uploadAndWaitForFile(
   });
 
   let file = uploadResult.file;
+  const startedAt = Date.now();
 
   // Poll until the file is done processing
   while (file.state === FileState.PROCESSING) {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    if (Date.now() - startedAt > FILE_PROCESSING_TIMEOUT_MS) {
+      throw new Error(
+        `File processing timed out after ${FILE_PROCESSING_TIMEOUT_MS / 1000}s`
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, FILE_POLL_INTERVAL_MS));
     file = await fileManager.getFile(file.name);
   }
 
