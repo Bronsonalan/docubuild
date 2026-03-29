@@ -1,6 +1,6 @@
 FROM node:20-slim AS base
 
-# Install FFmpeg and Chrome dependencies
+# Install FFmpeg and Chrome dependencies once for both build and runtime.
 RUN apt-get update && apt-get install -y \
   ffmpeg \
   chromium \
@@ -8,25 +8,38 @@ RUN apt-get update && apt-get install -y \
   --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
-# Tell Remotion/Puppeteer to use system Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROME_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
-# Install dependencies
+FROM base AS deps
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM deps AS builder
+
+COPY . .
+RUN npm run build
+
+FROM base AS runner
+
+ENV PORT=3000
+ENV NODE_ENV=production
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy source
-COPY . .
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/src ./src
+COPY --from=builder /app/next.config.mjs ./next.config.mjs
+COPY --from=builder /app/postcss.config.mjs ./postcss.config.mjs
+COPY --from=builder /app/tsconfig.json ./tsconfig.json
 
-# Build
-RUN npm run build
+RUN mkdir -p .data public/uploads public/renders
 
-# Run
 EXPOSE 3000
-ENV PORT=3000
-ENV NODE_ENV=production
 
 CMD ["npm", "start"]
