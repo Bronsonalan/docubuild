@@ -74,11 +74,15 @@ export default function EditorPage() {
 
     async function init() {
       try {
+        console.log(`[editor] init start projectId=${projectId}`);
         const res = await fetch(`/api/project/${projectId}`);
         if (!res.ok) throw new Error("Project not found");
         const proj: Project = await res.json();
         if (cancelled) return;
 
+        console.log(
+          `[editor] project loaded projectId=${projectId} transcript=${Boolean(proj.transcript)} edl=${Boolean(proj.edl)} status=${proj.status}`
+        );
         setVideoUrl(proj.videoUrl);
         setHookCandidates(proj.hookCandidates || []);
         setSelectedHook(proj.selectedHook);
@@ -89,15 +93,20 @@ export default function EditorPage() {
           setTranscript(proj.transcript);
           setEdl(proj.edl);
           setStatus("ready");
+          console.log(`[editor] ready from persisted state projectId=${projectId}`);
           return;
         }
 
         let transcriptToProcess = proj.transcript;
         if (transcriptToProcess) {
           setTranscript(transcriptToProcess);
+          console.log(
+            `[editor] resuming with persisted transcript projectId=${projectId} words=${transcriptToProcess.words.length}`
+          );
         } else {
           // Step 1: Transcribe (server persists result)
           setStatus("transcribing");
+          console.log(`[editor] requesting transcription projectId=${projectId}`);
           const transcribeRes = await fetch("/api/transcribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -112,10 +121,14 @@ export default function EditorPage() {
           if (cancelled) return;
           transcriptToProcess = transcribeData.transcript;
           setTranscript(transcriptToProcess);
+          console.log(
+            `[editor] transcription received projectId=${projectId} words=${transcriptToProcess?.words?.length ?? 0}`
+          );
         }
 
         // Step 2: Remove dead space (server persists result)
         setStatus("processing");
+        console.log(`[editor] requesting dead-space removal projectId=${projectId}`);
         const deadspaceRes = await fetch("/api/remove-deadspace", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -131,8 +144,12 @@ export default function EditorPage() {
         setEdl(deadspaceData.edl);
 
         setStatus("ready");
+        console.log(
+          `[editor] ready after processing projectId=${projectId} segments=${deadspaceData.edl.segments.length}`
+        );
       } catch (err) {
         if (!cancelled) {
+          console.error(`[editor] init failed projectId=${projectId}`, err);
           setErrorMsg(err instanceof Error ? err.message : "Unknown error");
           setStatus("error");
         }

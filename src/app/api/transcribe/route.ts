@@ -33,6 +33,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { projectId } = body;
 
+    console.log(`[transcribe] Request received projectId=${String(projectId)}`);
+
     if (!projectId || typeof projectId !== "string") {
       return NextResponse.json(
         { error: "projectId is required" },
@@ -49,11 +51,17 @@ export async function POST(request: NextRequest) {
     }
 
     if (project.transcript) {
+      console.log(
+        `[transcribe] Reusing persisted transcript projectId=${projectId} words=${project.transcript.words.length}`
+      );
       return NextResponse.json({ transcript: project.transcript });
     }
 
     // Update status
     await saveProject({ ...project, status: "transcribing" });
+    console.log(
+      `[transcribe] Starting Gemini transcription projectId=${projectId} videoUrl=${project.videoUrl}`
+    );
 
     // Resolve the video file path from the public directory
     const videoPath = path.join(process.cwd(), "public", project.videoUrl);
@@ -70,7 +78,14 @@ export async function POST(request: NextRequest) {
     const mimeType = mimeTypes[ext] || "video/mp4";
 
     // Upload to Gemini File API and wait for processing
-    const file = await uploadAndWaitForFile(videoPath, mimeType, `transcription-${Date.now()}`);
+    const file = await uploadAndWaitForFile(
+      videoPath,
+      mimeType,
+      `transcription-${Date.now()}`
+    );
+    console.log(
+      `[transcribe] Gemini file ready projectId=${projectId} file=${file.name}`
+    );
 
     // Generate transcription using Gemini
     const transcript = await generateJSON<Transcript>(
@@ -87,14 +102,24 @@ export async function POST(request: NextRequest) {
       ]
     );
 
+    console.log(
+      `[transcribe] Gemini transcription complete projectId=${projectId} words=${transcript.words.length} duration=${transcript.duration}`
+    );
+
     // Persist transcript so interrupted sessions can resume from processing.
     await saveProject({ ...project, transcript, status: "processing" });
+    console.log(
+      `[transcribe] Transcript persisted projectId=${projectId} next_status=processing`
+    );
 
     return NextResponse.json({ transcript });
   } catch (error) {
-    console.error("Transcription error:", error);
+    console.error("[transcribe] Error:", error);
     return NextResponse.json(
-      { error: "Failed to transcribe video" },
+      {
+        error: "Failed to transcribe video",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

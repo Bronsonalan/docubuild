@@ -9,6 +9,7 @@ const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("[upload] Request received");
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -27,6 +28,10 @@ export async function POST(request: NextRequest) {
     const id = uuidv4();
     const filename = `${id}${ext}`;
     const filepath = path.join(UPLOADS_DIR, filename);
+
+    console.log(
+      `[upload] Saving file projectId=${id} original_name=${file.name} size=${file.size} type=${file.type || "unknown"}`
+    );
 
     // Write the file to disk
     const bytes = await file.arrayBuffer();
@@ -47,11 +52,18 @@ export async function POST(request: NextRequest) {
     };
     await saveProject(project);
 
+    console.log(
+      `[upload] Upload complete projectId=${id} videoUrl=${videoUrl}`
+    );
+
     return NextResponse.json({ id, videoUrl });
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error("[upload] Error:", error);
     return NextResponse.json(
-      { error: "Failed to upload file" },
+      {
+        error: "Failed to upload file",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

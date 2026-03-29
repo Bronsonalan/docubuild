@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { bundle } from "@remotion/bundler";
-import { renderMedia, selectComposition } from "@remotion/renderer";
 import path from "path";
 import { mkdir } from "fs/promises";
 import { getProject, saveProject } from "@/lib/store";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 function firstHeaderValue(value: string | null): string | null {
   return value?.split(",")[0]?.trim() || null;
@@ -92,6 +91,12 @@ export async function POST(request: NextRequest) {
     // Create output directory
     const rendersDir = path.join(process.cwd(), "public", "renders");
     await mkdir(rendersDir, { recursive: true });
+
+    console.log("[render] Loading Remotion server packages...");
+    const [{ bundle }, { renderMedia, selectComposition }] = await Promise.all([
+      import("@remotion/bundler"),
+      import("@remotion/renderer"),
+    ]);
 
     // Bundle the Remotion entry point
     console.log("[render] Bundling Remotion project...");

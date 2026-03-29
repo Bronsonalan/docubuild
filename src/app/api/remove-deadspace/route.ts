@@ -12,6 +12,10 @@ export async function POST(request: NextRequest) {
       threshold?: number;
     };
 
+    console.log(
+      `[deadspace] Request received projectId=${String(projectId)} threshold=${threshold}`
+    );
+
     if (!projectId || typeof projectId !== "string") {
       return NextResponse.json(
         { error: "projectId is required" },
@@ -28,10 +32,16 @@ export async function POST(request: NextRequest) {
     }
 
     const { transcript } = project;
+    console.log(
+      `[deadspace] Processing transcript projectId=${projectId} words=${transcript.words.length}`
+    );
 
     if (transcript.words.length === 0) {
       const emptyEdl: EDL = { segments: [], hooks: [], captions: [] };
       await saveProject({ ...project, edl: emptyEdl, status: "editing" });
+      console.log(
+        `[deadspace] Empty transcript projectId=${projectId} -> empty EDL persisted`
+      );
       return NextResponse.json({ edl: emptyEdl });
     }
 
@@ -73,12 +83,18 @@ export async function POST(request: NextRequest) {
 
     // Persist EDL to project
     await saveProject({ ...project, edl, status: "editing" });
+    console.log(
+      `[deadspace] EDL persisted projectId=${projectId} segments=${edl.segments.length} captions=${edl.captions.length}`
+    );
 
     return NextResponse.json({ edl });
   } catch (error) {
-    console.error("Remove deadspace error:", error);
+    console.error("[deadspace] Error:", error);
     return NextResponse.json(
-      { error: "Failed to remove dead space" },
+      {
+        error: "Failed to remove dead space",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }
