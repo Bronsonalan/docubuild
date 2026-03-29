@@ -7,6 +7,11 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+const DEFAULT_CHROME_EXECUTABLE =
+  process.platform === "darwin"
+    ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    : "/usr/bin/chromium";
+
 function firstHeaderValue(value: string | null): string | null {
   return value?.split(",")[0]?.trim() || null;
 }
@@ -112,12 +117,17 @@ export async function POST(request: NextRequest) {
       edl: project.edl,
       selectedHook: project.selectedHook || null,
     };
+    const browserExecutable =
+      process.env.REMOTION_BROWSER_EXECUTABLE ||
+      process.env.CHROME_PATH ||
+      DEFAULT_CHROME_EXECUTABLE;
 
     // Resolve composition
     const composition = await selectComposition({
       serveUrl: bundleLocation,
       id: "DocuBuildShort",
       inputProps,
+      browserExecutable,
     });
 
     // Render the video
@@ -139,6 +149,7 @@ export async function POST(request: NextRequest) {
       codec: "h264",
       outputLocation: outputPath,
       inputProps,
+      browserExecutable,
     });
 
     console.log(`[render] Render complete for project ${projectId}`);
